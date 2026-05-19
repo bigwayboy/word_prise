@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>自助格式报价单</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="quote-panel" aria-labelledby="page-title">
+        <header class="page-header">
+          <h1 id="page-title">自助格式报价单</h1>
+          <p>上传 .docx 论文，系统会在本地分析字数、图表、参考文献、公式和脚注，并生成报价。</p>
+        </header>
+
+        <form id="quote-form" class="quote-form">
+          <section class="upload-area">
+            <input id="word-file" type="file" accept=".doc,.docx" hidden />
+            <button id="upload-button" class="upload-button" type="button">
+              <span class="upload-icon" aria-hidden="true">+</span>
+              <span>上传 Word 文件</span>
+            </button>
+            <div class="file-meta">
+              <strong id="file-name">尚未选择文件</strong>
+              <span id="file-hint">仅支持 .docx 自动报价；.doc 文件需另存为 .docx 后上传。</span>
+            </div>
+          </section>
+
+          <section class="options-area" aria-labelledby="options-title">
+            <div class="section-title-row">
+              <h2 id="options-title">请选择需要修改的样式</h2>
+              <div class="bulk-actions" aria-label="批量选择项目">
+                <button type="button" id="select-all">全选</button>
+                <button type="button" id="clear-all">清空</button>
+              </div>
+            </div>
+
+            <div class="price-grid" id="price-options"></div>
+
+            <label class="rush-option">
+              <input id="rush" type="checkbox" />
+              <span>
+                <strong>加急</strong>
+                <small>勾选后在总价基础上加收 30%</small>
+              </span>
+            </label>
+          </section>
+
+          <div class="form-actions">
+            <button class="submit-button" type="submit">提交并计算报价</button>
+            <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+
+        <section id="analysis-card" class="analysis-card is-hidden" aria-labelledby="analysis-title">
+          <h2 id="analysis-title">文档分析结果</h2>
+          <div class="metric-grid" id="metric-grid"></div>
+        </section>
+
+        <section id="result-card" class="result-card is-hidden" aria-labelledby="result-title">
+          <div class="section-title-row">
+            <h2 id="result-title">报价明细</h2>
+            <strong id="total-price" class="total-price">¥0.00</strong>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>数量</th>
+                  <th>单价</th>
+                  <th>小计</th>
+                </tr>
+              </thead>
+              <tbody id="quote-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
