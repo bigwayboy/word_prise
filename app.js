@@ -63,9 +63,10 @@ const PRICING_ITEMS = [
   },
   {
     id: "formulas",
-    label: "公式",
+    label: "公式（准确性不高）",
     unitLabel: `${PRICE_CONFIG.formulas} 元 / 个`,
     price: PRICE_CONFIG.formulas,
+    checkedByDefault: false,
     quantity: (metrics) => metrics.formulaCount,
     quantityLabel: (metrics) => `${metrics.formulaCount} 个`,
   },
@@ -166,7 +167,9 @@ function renderOptions() {
   priceOptions.innerHTML = PRICING_ITEMS.map(
     (item) => `
       <label class="price-option">
-        <input class="item-checkbox" type="checkbox" value="${item.id}" checked />
+        <input class="item-checkbox" type="checkbox" value="${item.id}" ${
+          item.checkedByDefault === false ? "" : "checked"
+        } />
         <span>
           <strong>${item.label}</strong>
           <small>${item.unitLabel}</small>
@@ -243,10 +246,12 @@ function renderQuote(rows, isRush) {
     .map(
       (row) => `
         <tr>
-          <td>${row.label}${row.isFreeCover ? "（满减优惠）" : ""}</td>
-          <td>${row.quantityLabel}</td>
-          <td>${row.unitLabel}</td>
-          <td>${row.isFreeCover ? `<s>${formatMoney(row.subtotal)}</s>` : formatMoney(row.subtotal)}</td>
+          <td data-label="项目">${row.label}${row.isFreeCover ? "（满减优惠）" : ""}</td>
+          <td data-label="数量">${row.quantityLabel}</td>
+          <td data-label="单价">${row.unitLabel}</td>
+          <td data-label="小计">${
+            row.isFreeCover ? `<s>${formatMoney(row.subtotal)}</s>` : formatMoney(row.subtotal)
+          }</td>
         </tr>
       `,
     )
