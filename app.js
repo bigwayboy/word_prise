@@ -295,7 +295,7 @@ async function analyzeDocx(file) {
   const appXml = zipEntries.get("docProps/app.xml") || "";
   const paragraphs = extractParagraphs(documentXml);
   const plainText = paragraphs.join("");
-  const wordCount = getSavedWordCount(appXml) ?? countWpsLikeWords(plainText);
+  const wordCount = countDocumentWords(plainText, appXml);
   const imageCount = countImages(documentXml, zipEntries);
   const tableCount = countMatches(documentXml, /<w:tbl[\s>]/g);
   const footnoteCount = countFootnotes(footnotesXml);
@@ -419,6 +419,12 @@ function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function countDocumentWords(text, appXml) {
+  const calculatedWords = countWpsLikeWords(text);
+  const savedWords = getSavedWordCount(appXml);
+  return savedWords === null ? calculatedWords : Math.max(calculatedWords, savedWords);
+}
+
 function getSavedWordCount(appXml) {
   const savedWords = getXmlNumber(appXml, "Words");
   if (savedWords !== null) {
@@ -439,9 +445,11 @@ function getXmlNumber(xml, tagName) {
 }
 
 function countWpsLikeWords(text) {
-  const chineseChars = text.match(/[\u3400-\u9fff]/g)?.length || 0;
-  const latinWords = text.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length || 0;
-  return chineseChars + latinWords;
+  const normalized = text.normalize("NFKC");
+  const chineseChars = normalized.match(/[\u3400-\u9fff]/g)?.length || 0;
+  const latinWords = normalized.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g)?.length || 0;
+  const numbers = normalized.match(/\d+(?:[.,]\d+)*/g)?.length || 0;
+  return chineseChars + latinWords + numbers;
 }
 
 function countImages(documentXml, zipEntries) {
