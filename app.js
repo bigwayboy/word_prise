@@ -294,11 +294,10 @@ async function analyzeDocx(file) {
   const footnotesXml = zipEntries.get("word/footnotes.xml") || "";
   const paragraphs = extractParagraphs(documentXml);
   const plainText = paragraphs.join("");
-  const bodyText = getBodyTextBeforeReferences(paragraphs);
   const imageCount = countImages(documentXml, zipEntries);
   const tableCount = countMatches(documentXml, /<w:tbl[\s>]/g);
   const footnoteCount = countFootnotes(footnotesXml);
-  const referenceCount = countCitationMarkers(bodyText);
+  const referenceCount = countReferenceTypeMarkers(paragraphs);
   const formulaCount = countFormulas(documentXml, paragraphs);
 
   return {
@@ -443,60 +442,20 @@ function countFootnotes(xml) {
   }).length;
 }
 
-function getBodyTextBeforeReferences(paragraphs) {
+function getReferenceSectionText(paragraphs) {
   const referenceHeadingIndex = paragraphs.findLastIndex((text) =>
     /^(参考文献|参考资料|References|Bibliography)\b[:：]?$|^参考文献[:：]/i.test(text.trim()),
   );
-  const bodyParagraphs =
-    referenceHeadingIndex > 0 ? paragraphs.slice(0, referenceHeadingIndex) : paragraphs;
-  return bodyParagraphs.join(" ");
+  const referenceParagraphs =
+    referenceHeadingIndex >= 0 ? paragraphs.slice(referenceHeadingIndex + 1) : paragraphs;
+  return referenceParagraphs.join(" ");
 }
 
-function countCitationMarkers(text) {
-  const citationNumbers = new Set();
-  const normalized = text.replace(/\s+/g, "");
-  const markerPattern = /[［\[]([0-9,;\-－—–，、；~～\s]+)[］\]]/g;
-  let match;
-
-  while ((match = markerPattern.exec(normalized)) !== null) {
-    expandCitationNumbers(match[1]).forEach((number) => citationNumbers.add(number));
-  }
-
-  return citationNumbers.size;
-}
-
-function expandCitationNumbers(markerText) {
-  const normalized = markerText
-    .replace(/[，、]/g, ",")
-    .replace(/[；;]/g, ",")
-    .replace(/[－—–~～]/g, "-")
-    .replace(/\s+/g, "");
-  const numbers = new Set();
-
-  normalized.split(",").forEach((part) => {
-    if (!part) {
-      return;
-    }
-
-    const rangeMatch = part.match(/^(\d+)-(\d+)$/);
-    if (rangeMatch) {
-      const start = Number(rangeMatch[1]);
-      const end = Number(rangeMatch[2]);
-      if (Number.isInteger(start) && Number.isInteger(end) && end >= start && end - start <= 200) {
-        for (let number = start; number <= end; number += 1) {
-          numbers.add(number);
-        }
-      }
-      return;
-    }
-
-    const number = Number(part);
-    if (Number.isInteger(number) && number > 0) {
-      numbers.add(number);
-    }
-  });
-
-  return numbers;
+function countReferenceTypeMarkers(paragraphs) {
+  const referenceText = getReferenceSectionText(paragraphs).replace(/\s+/g, "");
+  const markerPattern =
+    /[［\[](?:M\/OL|J\/OL|C\/OL|R\/OL|D\/OL|P\/OL|S\/OL|N\/OL|EB\/OL|J|D|C|S|M|G|R|P|N|EB|A|Z)[］\]]/gi;
+  return referenceText.match(markerPattern)?.length || 0;
 }
 
 function countFormulas(documentXml, paragraphs) {
