@@ -292,8 +292,10 @@ async function analyzeDocx(file) {
   }
 
   const footnotesXml = zipEntries.get("word/footnotes.xml") || "";
+  const appXml = zipEntries.get("docProps/app.xml") || "";
   const paragraphs = extractParagraphs(documentXml);
   const plainText = paragraphs.join("");
+  const wordCount = getSavedWordCount(appXml) ?? countWpsLikeWords(plainText);
   const imageCount = countImages(documentXml, zipEntries);
   const tableCount = countMatches(documentXml, /<w:tbl[\s>]/g);
   const footnoteCount = countFootnotes(footnotesXml);
@@ -301,7 +303,7 @@ async function analyzeDocx(file) {
   const formulaCount = countFormulas(documentXml, paragraphs);
 
   return {
-    wordCount: countTextCharacters(plainText),
+    wordCount,
     imageCount,
     tableCount,
     figureTableCount: imageCount + tableCount,
@@ -417,10 +419,28 @@ function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function countTextCharacters(text) {
-  const withoutReferences = text.replace(/\s+/g, "");
-  const chineseChars = withoutReferences.match(/[\u3400-\u9fff]/g)?.length || 0;
-  const latinWords = withoutReferences.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length || 0;
+function getSavedWordCount(appXml) {
+  const savedWords = getXmlNumber(appXml, "Words");
+  if (savedWords !== null) {
+    return savedWords;
+  }
+
+  return getXmlNumber(appXml, "Characters");
+}
+
+function getXmlNumber(xml, tagName) {
+  const match = xml.match(new RegExp(`<${tagName}>(\\d+)<\\/${tagName}>`, "i"));
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function countWpsLikeWords(text) {
+  const chineseChars = text.match(/[\u3400-\u9fff]/g)?.length || 0;
+  const latinWords = text.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length || 0;
   return chineseChars + latinWords;
 }
 
