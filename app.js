@@ -294,8 +294,7 @@ async function analyzeDocx(file) {
   const footnotesXml = zipEntries.get("word/footnotes.xml") || "";
   const appXml = zipEntries.get("docProps/app.xml") || "";
   const paragraphs = extractParagraphs(documentXml);
-  const plainText = paragraphs.join("");
-  const wordCount = countDocumentWords(plainText, appXml);
+  const wordCount = countDocumentWords(zipEntries, appXml);
   const imageCount = countImages(documentXml, zipEntries);
   const tableCount = countMatches(documentXml, /<w:tbl[\s>]/g);
   const footnoteCount = countFootnotes(footnotesXml);
@@ -419,10 +418,27 @@ function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function countDocumentWords(text, appXml) {
-  const calculatedWords = countWpsLikeWords(text);
+function countDocumentWords(zipEntries, appXml) {
+  const calculatedWords = countWpsLikeWords(extractCountableDocumentText(zipEntries));
   const savedWords = getSavedWordCount(appXml);
   return savedWords === null ? calculatedWords : Math.max(calculatedWords, savedWords);
+}
+
+function extractCountableDocumentText(zipEntries) {
+  return Array.from(zipEntries.entries())
+    .filter(([name, value]) => typeof value === "string" && isCountableWordXml(name))
+    .map(([, xml]) => xmlTextForWordCount(xml))
+    .join("");
+}
+
+function isCountableWordXml(name) {
+  return /^word\/(?:document|footnotes|endnotes|header\d+|footer\d+)\.xml$/i.test(name);
+}
+
+function xmlTextForWordCount(xml) {
+  return Array.from(xml.matchAll(/<(?:w|a|m):t(?:\s[^>]*)?>([\s\S]*?)<\/(?:w|a|m):t>/g))
+    .map((match) => decodeXml(match[1]))
+    .join("");
 }
 
 function getSavedWordCount(appXml) {
