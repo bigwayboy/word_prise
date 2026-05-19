@@ -57,6 +57,21 @@ input {
   letter-spacing: 0;
 }
 
+.brand-title {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.brand-title img {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 8px 18px rgba(23, 32, 51, 0.16);
+}
+
 .page-header p {
   max-width: 760px;
   margin: 12px 0 0;
@@ -369,5 +384,70 @@ s {
 
   .price-option em {
     grid-column: 2;
+  }
+
+  .table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+
+  table {
+    min-width: 0;
+  }
+
+  thead {
+    display: none;
+  }
+
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  tr {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+  }
+
+  td {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    min-height: 42px;
+    padding: 10px 12px;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  td:last-child {
+    text-align: left;
+    color: var(--brand-dark);
+    font-weight: 700;
+  }
+
+  .brand-title {
+    align-items: flex-start;
+  }
+
+  .brand-title img {
+    width: 52px;
+    height: 52px;
   }
 }
