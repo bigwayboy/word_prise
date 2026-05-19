@@ -84,6 +84,16 @@ input {
   line-height: 1.45;
 }
 
+.service-notes strong {
+  font-size: 20px;
+}
+
+.service-notes span {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .page-header p {
   max-width: 760px;
   margin: 12px 0 0;
