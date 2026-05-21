@@ -225,6 +225,17 @@ h2 {
   cursor: pointer;
 }
 
+.secondary-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--brand);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--brand-dark);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .price-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -314,6 +325,18 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fafbfc;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.metric.is-clickable {
+  cursor: pointer;
+}
+
+.metric.is-clickable:hover {
+  border-color: var(--brand);
+  background: var(--soft);
 }
 
 .metric strong {
@@ -331,6 +354,34 @@ h2 {
 .total-price {
   color: var(--brand-dark);
   font-size: 28px;
+}
+
+.detail-list {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.detail-list ol {
+  margin: 0;
+  padding: 8px 18px 8px 38px;
+}
+
+.detail-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.6;
+}
+
+.detail-list li:last-child {
+  border-bottom: 0;
+}
+
+.empty-detail {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
 }
 
 .table-wrap {
