@@ -628,17 +628,45 @@ function countFormulas(documentXml, paragraphs) {
 
   paragraphXmlList.forEach((paragraphXml) => {
     const text = normalizeText(xmlParagraphToText(paragraphXml));
-    const hasOfficeMath = /<m:oMath|<m:oMathPara/.test(paragraphXml);
-    const hasFormulaText = /[=≈≠≤≥∑∫√∞±×÷α-ωΑ-Ω]|\\frac|\\sum|\\int|lim|sin|cos|tan|log/i.test(text);
-    const hasNumber = /(?:\(?（?\d+(?:\.\d+)*\)?）?|式\s*\d+)\s*$/.test(text);
-    const isStandalone = text.length <= 160;
+    const markerCount = countEquationNumberMarkers(text);
 
-    if (isStandalone && hasNumber && (hasOfficeMath || hasFormulaText)) {
+    if (markerCount > 0) {
+      count += markerCount;
+      return;
+    }
+
+    const mathTypeCount = countMathTypeObjects(paragraphXml);
+    if (mathTypeCount > 0) {
+      count += mathTypeCount;
+      return;
+    }
+
+    if (hasStandaloneOfficeFormula(paragraphXml, text)) {
       count += 1;
     }
   });
 
   return count;
+}
+
+function countEquationNumberMarkers(text) {
+  const normalized = text
+    .normalize("NFKC")
+    .replace(/[－—–]/g, "-")
+    .replace(/[．。]/g, ".");
+  const matches = normalized.match(/\(\s*(?:式\s*)?\d+\s*(?:[.-]\s*\d+)+\s*\)/g);
+  return matches?.length || 0;
+}
+
+function countMathTypeObjects(paragraphXml) {
+  return paragraphXml.match(/<o:OLEObject\b[^>]*\bProgID="(?:Equation|MathType)[^"]*"/gi)?.length || 0;
+}
+
+function hasStandaloneOfficeFormula(paragraphXml, text) {
+  const hasOfficeMath = /<m:oMath|<m:oMathPara/.test(paragraphXml);
+  const hasFormulaText = /[=≈≠≤≥∑∫√∞±×÷α-ωΑ-Ω]|\\frac|\\sum|\\int|lim|sin|cos|tan|log/i.test(text);
+  const isStandalone = text.length <= 160;
+  return isStandalone && hasOfficeMath && hasFormulaText;
 }
 
 function countMatches(text, regex) {
