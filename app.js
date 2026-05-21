@@ -93,11 +93,18 @@ const priceOptions = document.querySelector("#price-options");
 const quoteForm = document.querySelector("#quote-form");
 const quoteBody = document.querySelector("#quote-body");
 const totalPrice = document.querySelector("#total-price");
+const resultTitle = document.querySelector("#result-title");
 const resultCard = document.querySelector("#result-card");
 const analysisCard = document.querySelector("#analysis-card");
 const metricGrid = document.querySelector("#metric-grid");
 const rushInput = document.querySelector("#rush");
 const dropZone = document.querySelector("#drop-zone");
+const quoteDetailButton = document.querySelector("#quote-detail-button");
+const detailList = document.querySelector("#detail-list");
+
+let latestDetails = {};
+let latestQuoteRows = [];
+let latestRush = false;
 
 renderOptions();
 
@@ -152,6 +159,10 @@ document.querySelector("#clear-all").addEventListener("click", () => {
   });
 });
 
+quoteDetailButton.addEventListener("click", () => {
+  renderQuote(latestQuoteRows, latestRush);
+});
+
 quoteForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   hideResults();
@@ -185,8 +196,11 @@ quoteForm.addEventListener("submit", async (event) => {
   try {
     const metrics = await analyzeDocx(file);
     const rows = buildQuoteRows(metrics, selectedIds);
+    latestDetails = metrics.details || {};
+    latestQuoteRows = rows;
+    latestRush = rushInput.checked;
     renderMetrics(metrics);
-    renderQuote(rows, rushInput.checked);
+    renderQuote(latestQuoteRows, latestRush);
     setStatus("报价已生成。");
   } catch (error) {
     console.error(error);
@@ -237,28 +251,42 @@ function buildQuoteRows(metrics, selectedIds) {
 
 function renderMetrics(metrics) {
   const items = [
-    ["字数", metrics.wordCount],
-    ["图片", metrics.imageCount],
-    ["表格", metrics.tableCount],
-    ["参考文献", metrics.referenceCount],
-    ["公式", metrics.formulaCount],
-    ["脚注", metrics.footnoteCount],
+    ["字数", metrics.wordCount, null],
+    ["图片", metrics.imageCount, "images"],
+    ["表格", metrics.tableCount, "tables"],
+    ["参考文献", metrics.referenceCount, "references"],
+    ["公式", metrics.formulaCount, "formulas"],
+    ["脚注", metrics.footnoteCount, "footnotes"],
   ];
 
   metricGrid.innerHTML = items
     .map(
-      ([label, value]) => `
-        <div class="metric">
+      ([label, value, detailKey]) => `
+        <button class="metric ${detailKey ? "is-clickable" : ""}" type="button" ${
+          detailKey ? `data-detail-key="${detailKey}"` : "disabled"
+        }>
           <strong>${value}</strong>
           <span>${label}</span>
-        </div>
+        </button>
       `,
     )
     .join("");
+
+  metricGrid.querySelectorAll("[data-detail-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      renderDetailList(button.dataset.detailKey, button.querySelector("span").textContent);
+    });
+  });
   analysisCard.classList.remove("is-hidden");
 }
 
 function renderQuote(rows, isRush) {
+  resultTitle.textContent = "报价明细";
+  quoteDetailButton.classList.add("is-hidden");
+  detailList.classList.add("is-hidden");
+  detailList.innerHTML = "";
+  document.querySelector(".table-wrap").classList.remove("is-hidden");
+  totalPrice.classList.remove("is-hidden");
   const originalTotal = rows.reduce((sum, row) => sum + row.subtotal, 0);
   const shouldFreeCover =
     originalTotal > PRICE_CONFIG.freeCoverThreshold && rows.some((row) => row.id === "cover");
@@ -298,6 +326,29 @@ function renderQuote(rows, isRush) {
   resultCard.classList.remove("is-hidden");
 }
 
+function renderDetailList(detailKey, label) {
+  const details = latestDetails?.[detailKey] || [];
+  resultTitle.textContent = `${label}明细`;
+  quoteDetailButton.classList.remove("is-hidden");
+  document.querySelector(".table-wrap").classList.add("is-hidden");
+  totalPrice.classList.add("is-hidden");
+  detailList.classList.remove("is-hidden");
+  detailList.innerHTML =
+    details.length > 0
+      ? `<ol>${details.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`
+      : `<p class="empty-detail">没有检测到${label}。</p>`;
+  resultCard.classList.remove("is-hidden");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function formatMoney(value) {
   return `¥${value.toFixed(2)}`;
 }
@@ -316,6 +367,9 @@ function hideResults() {
   analysisCard.classList.add("is-hidden");
   quoteBody.innerHTML = "";
   metricGrid.innerHTML = "";
+  detailList.innerHTML = "";
+  detailList.classList.add("is-hidden");
+  quoteDetailButton.classList.add("is-hidden");
   totalPrice.textContent = "¥0.00";
 }
 
@@ -332,20 +386,27 @@ async function analyzeDocx(file) {
   const appXml = zipEntries.get("docProps/app.xml") || "";
   const paragraphs = extractParagraphs(documentXml);
   const wordCount = countDocumentWords(zipEntries, appXml);
-  const imageCount = countImages(documentXml, zipEntries);
-  const tableCount = countMatches(documentXml, /<w:tbl[\s>]/g);
-  const footnoteCount = countFootnotes(footnotesXml);
-  const referenceCount = countReferenceTypeMarkers(paragraphs);
-  const formulaCount = countFormulas(documentXml, paragraphs);
+  const imageDetails = getImageDetails(documentXml, zipEntries);
+  const tableDetails = getTableDetails(documentXml);
+  const footnoteDetails = getFootnoteDetails(footnotesXml);
+  const referenceDetails = getReferenceTypeMarkerDetails(paragraphs);
+  const formulaDetails = getFormulaDetails(documentXml);
 
   return {
     wordCount,
-    imageCount,
-    tableCount,
-    figureTableCount: imageCount + tableCount,
-    footnoteCount,
-    referenceCount,
-    formulaCount,
+    imageCount: imageDetails.length,
+    tableCount: tableDetails.length,
+    figureTableCount: imageDetails.length + tableDetails.length,
+    footnoteCount: footnoteDetails.length,
+    referenceCount: referenceDetails.length,
+    formulaCount: formulaDetails.length,
+    details: {
+      images: imageDetails,
+      tables: tableDetails,
+      references: referenceDetails,
+      formulas: formulaDetails,
+      footnotes: footnoteDetails,
+    },
   };
 }
 
@@ -520,8 +581,12 @@ function countWpsLikeWords(text) {
 }
 
 function countImages(documentXml, zipEntries) {
+  return getImageDetails(documentXml, zipEntries).length;
+}
+
+function getImageDetails(documentXml, zipEntries) {
   const relationshipMap = parseRelationshipTargets(zipEntries.get("word/_rels/document.xml.rels") || "");
-  return countRealImageReferences(documentXml, relationshipMap);
+  return getRealImageDetails(documentXml, relationshipMap);
 }
 
 function parseRelationshipTargets(relsXml) {
@@ -535,19 +600,25 @@ function parseRelationshipTargets(relsXml) {
 }
 
 function countRealImageReferences(documentXml, relationshipMap) {
-  const paragraphXmlList = Array.from(documentXml.matchAll(/<w:p[\s\S]*?<\/w:p>/g)).map((match) => match[0]);
-  let count = 0;
+  return getRealImageDetails(documentXml, relationshipMap).length;
+}
 
-  paragraphXmlList.forEach((paragraphXml) => {
+function getRealImageDetails(documentXml, relationshipMap) {
+  const paragraphXmlList = Array.from(documentXml.matchAll(/<w:p[\s\S]*?<\/w:p>/g)).map((match) => match[0]);
+  const details = [];
+
+  paragraphXmlList.forEach((paragraphXml, paragraphIndex) => {
     const imageRefs = extractParagraphImageRefs(paragraphXml, relationshipMap);
     imageRefs.forEach((imageRef) => {
       if (isRealFigureImage(imageRef)) {
-        count += 1;
+        details.push(
+          `图片${details.length + 1}：${imageRef.extension.toUpperCase()}，约在第 ${paragraphIndex + 1} 段`,
+        );
       }
     });
   });
 
-  return count;
+  return details;
 }
 
 function extractParagraphImageRefs(paragraphXml, relationshipMap) {
@@ -596,14 +667,27 @@ function isRealFigureImage(imageRef) {
 }
 
 function countFootnotes(xml) {
+  return getFootnoteDetails(xml).length;
+}
+
+function getFootnoteDetails(xml) {
   if (!xml) {
-    return 0;
+    return [];
   }
 
-  return Array.from(xml.matchAll(/<w:footnote\b([^>]*)>/g)).filter((match) => {
-    const attrs = match[1];
-    return !/w:type="(?:separator|continuationSeparator|continuationNotice)"/.test(attrs);
-  }).length;
+  return Array.from(xml.matchAll(/<w:footnote\b([^>]*)>([\s\S]*?)<\/w:footnote>/g))
+    .filter((match) => !/w:type="(?:separator|continuationSeparator|continuationNotice)"/.test(match[1]))
+    .map((match, index) => {
+      const text = normalizeText(xmlParagraphToText(match[2])) || "未提取到脚注文字";
+      return `脚注${index + 1}：${truncateText(text, 80)}`;
+    });
+}
+
+function getTableDetails(documentXml) {
+  return Array.from(documentXml.matchAll(/<w:tbl[\s\S]*?<\/w:tbl>/g)).map((match, index) => {
+    const text = normalizeText(xmlParagraphToText(match[0])) || "未提取到表格文字";
+    return `表格${index + 1}：${truncateText(text, 80)}`;
+  });
 }
 
 function getReferenceSectionText(paragraphs) {
@@ -616,37 +700,66 @@ function getReferenceSectionText(paragraphs) {
 }
 
 function countReferenceTypeMarkers(paragraphs) {
-  const referenceText = getReferenceSectionText(paragraphs).replace(/\s+/g, "");
+  return getReferenceTypeMarkerDetails(paragraphs).length;
+}
+
+function getReferenceTypeMarkerDetails(paragraphs) {
+  const referenceParagraphs = getReferenceSectionParagraphs(paragraphs);
   const markerPattern =
     /[［\[](?:M\/OL|J\/OL|C\/OL|R\/OL|D\/OL|P\/OL|S\/OL|N\/OL|EB\/OL|J|D|C|S|M|G|R|P|N|EB|A|Z)[］\]]/gi;
-  return referenceText.match(markerPattern)?.length || 0;
+  const details = [];
+
+  referenceParagraphs.forEach((paragraph) => {
+    const normalized = paragraph.replace(/\s+/g, "");
+    const markers = normalized.match(markerPattern) || [];
+    markers.forEach((marker) => {
+      details.push(`参考文献${details.length + 1}：${marker} ${truncateText(paragraph, 90)}`);
+    });
+  });
+
+  return details;
+}
+
+function getReferenceSectionParagraphs(paragraphs) {
+  const referenceHeadingIndex = paragraphs.findLastIndex((text) =>
+    /^(参考文献|参考资料|References|Bibliography)\b[:：]?$|^参考文献[:：]/i.test(text.trim()),
+  );
+  return referenceHeadingIndex >= 0 ? paragraphs.slice(referenceHeadingIndex + 1) : paragraphs;
 }
 
 function countFormulas(documentXml, paragraphs) {
-  const paragraphXmlList = Array.from(documentXml.matchAll(/<w:p[\s\S]*?<\/w:p>/g)).map((match) => match[0]);
-  let count = 0;
+  return getFormulaDetails(documentXml).length;
+}
 
-  paragraphXmlList.forEach((paragraphXml) => {
+function getFormulaDetails(documentXml) {
+  const paragraphXmlList = Array.from(documentXml.matchAll(/<w:p[\s\S]*?<\/w:p>/g)).map((match) => match[0]);
+  const details = [];
+
+  paragraphXmlList.forEach((paragraphXml, paragraphIndex) => {
     const text = normalizeText(xmlParagraphToText(paragraphXml));
     const markerCount = countEquationNumberMarkers(text);
 
     if (markerCount > 0) {
-      count += markerCount;
+      for (let index = 0; index < markerCount; index += 1) {
+        details.push(`公式${details.length + 1}：检测到公式编号，约在第 ${paragraphIndex + 1} 段`);
+      }
       return;
     }
 
     const mathTypeCount = countMathTypeObjects(paragraphXml);
     if (mathTypeCount > 0) {
-      count += mathTypeCount;
+      for (let index = 0; index < mathTypeCount; index += 1) {
+        details.push(`公式${details.length + 1}：MathType/Equation 对象，约在第 ${paragraphIndex + 1} 段`);
+      }
       return;
     }
 
     if (hasStandaloneOfficeFormula(paragraphXml, text)) {
-      count += 1;
+      details.push(`公式${details.length + 1}：Office 公式，约在第 ${paragraphIndex + 1} 段`);
     }
   });
 
-  return count;
+  return details;
 }
 
 function countEquationNumberMarkers(text) {
@@ -671,4 +784,8 @@ function hasStandaloneOfficeFormula(paragraphXml, text) {
 
 function countMatches(text, regex) {
   return text.match(regex)?.length || 0;
+}
+
+function truncateText(text, maxLength) {
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
