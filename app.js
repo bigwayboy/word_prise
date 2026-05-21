@@ -337,7 +337,7 @@ async function readZipEntries(buffer) {
     const rawName = new Uint8Array(buffer, nameStart, fileNameLength);
     const name = textDecoder.decode(rawName).replaceAll("\\", "/");
 
-    if (name.endsWith(".xml") || name.startsWith("word/media/")) {
+    if (name.endsWith(".xml") || name.endsWith(".rels") || name.startsWith("word/media/")) {
       const bytes = await readZipEntryBytes(
         buffer,
         view,
@@ -345,7 +345,7 @@ async function readZipEntries(buffer) {
         compressedSize,
         compressionMethod,
       );
-      entries.set(name, name.endsWith(".xml") ? textDecoder.decode(bytes) : bytes);
+      entries.set(name, name.endsWith(".xml") || name.endsWith(".rels") ? textDecoder.decode(bytes) : bytes);
     }
 
     offset = nameStart + fileNameLength + extraLength + commentLength;
@@ -464,15 +464,98 @@ function countWpsLikeWords(text) {
   const normalized = text.normalize("NFKC");
   const chineseChars = normalized.match(/[\u3400-\u9fff]/g)?.length || 0;
   const latinWords = normalized.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g)?.length || 0;
-  const numbers = normalized.match(/\d+(?:[.,]\d+)*/g)?.length || 0;
-  return chineseChars + latinWords + numbers;
+  const numberTokens = normalized.match(/\d+(?:[.,]\d+)*/g)?.length || 0;
+  const digitChars = normalized.match(/\d/g)?.length || 0;
+  const selectedPunctuation = normalized.match(/[,.，。:：;；()（）\-—%％]/g)?.length || 0;
+  const baseCount = chineseChars + latinWords + numberTokens;
+  const digitExtra = Math.max(0, digitChars - numberTokens);
+  let total = baseCount;
+
+  if (baseCount > 0 && digitExtra / baseCount <= 0.08) {
+    total += digitExtra;
+  }
+
+  if (baseCount > 0 && selectedPunctuation / baseCount <= 0.05) {
+    total += selectedPunctuation;
+  }
+
+  return total;
 }
 
 function countImages(documentXml, zipEntries) {
-  const mediaCount = Array.from(zipEntries.keys()).filter((name) => name.startsWith("word/media/")).length;
-  const drawingCount = countMatches(documentXml, /<(?:w:)?drawing[\s>]/g);
-  const pictCount = countMatches(documentXml, /<(?:w:)?pict[\s>]/g);
-  return Math.max(mediaCount, drawingCount + pictCount);
+  const relationshipMap = parseRelationshipTargets(zipEntries.get("word/_rels/document.xml.rels") || "");
+  return countRealImageReferences(documentXml, relationshipMap);
+}
+
+function parseRelationshipTargets(relsXml) {
+  const targets = new Map();
+  Array.from(relsXml.matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g)).forEach(
+    (match) => {
+      targets.set(match[1], match[2]);
+    },
+  );
+  return targets;
+}
+
+function countRealImageReferences(documentXml, relationshipMap) {
+  const paragraphXmlList = Array.from(documentXml.matchAll(/<w:p[\s\S]*?<\/w:p>/g)).map((match) => match[0]);
+  let count = 0;
+
+  paragraphXmlList.forEach((paragraphXml) => {
+    const imageRefs = extractParagraphImageRefs(paragraphXml, relationshipMap);
+    imageRefs.forEach((imageRef) => {
+      if (isRealFigureImage(imageRef)) {
+        count += 1;
+      }
+    });
+  });
+
+  return count;
+}
+
+function extractParagraphImageRefs(paragraphXml, relationshipMap) {
+  const refs = [];
+  const drawingBlocks = paragraphXml.match(/<w:drawing[\s\S]*?<\/w:drawing>/g) || [];
+  const pictBlocks = paragraphXml.match(/<w:pict[\s\S]*?<\/w:pict>/g) || [];
+
+  drawingBlocks.forEach((block) => {
+    const extension = getImageExtension(block, relationshipMap);
+    const extent = block.match(/<wp:extent[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/);
+    refs.push({
+      extension,
+      width: extent ? Number(extent[1]) : 0,
+      height: extent ? Number(extent[2]) : 0,
+    });
+  });
+
+  pictBlocks.forEach((block) => {
+    refs.push({
+      extension: getImageExtension(block, relationshipMap),
+      width: 0,
+      height: 0,
+    });
+  });
+
+  return refs;
+}
+
+function getImageExtension(xml, relationshipMap) {
+  const relationshipIdMatch = xml.match(/r:(?:embed|id)="([^"]+)"/);
+  const target = relationshipIdMatch ? relationshipMap.get(relationshipIdMatch[1]) || "" : "";
+  const mediaMatch = target.match(/media\/[^"']+\.([A-Za-z0-9]+)/i);
+  return mediaMatch ? mediaMatch[1].toLowerCase() : "";
+}
+
+function isRealFigureImage(imageRef) {
+  if (!imageRef.extension) {
+    return false;
+  }
+
+  if (!["wmf", "emf"].includes(imageRef.extension)) {
+    return true;
+  }
+
+  return imageRef.height >= 900000;
 }
 
 function countFootnotes(xml) {
