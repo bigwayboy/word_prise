@@ -97,6 +97,7 @@ const resultCard = document.querySelector("#result-card");
 const analysisCard = document.querySelector("#analysis-card");
 const metricGrid = document.querySelector("#metric-grid");
 const rushInput = document.querySelector("#rush");
+const dropZone = document.querySelector("#drop-zone");
 
 renderOptions();
 
@@ -104,9 +105,39 @@ uploadButton.addEventListener("click", () => fileInput.click());
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
-  fileName.textContent = file ? file.name : "尚未选择文件";
-  clearStatus();
-  hideResults();
+  setSelectedFile(file);
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    dropZone.classList.add("is-dragging");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    if (event.target === dropZone || eventName === "drop") {
+      dropZone.classList.remove("is-dragging");
+    }
+  });
+});
+
+dropZone.addEventListener("drop", (event) => {
+  const file = Array.from(event.dataTransfer?.files || []).find((item) =>
+    /\.(doc|docx)$/i.test(item.name),
+  );
+
+  if (!file) {
+    setStatus("请拖入 .doc 或 .docx 格式的 Word 文件。", true);
+    return;
+  }
+
+  const dataTransfer = new DataTransfer();
+  dataTransfer.items.add(file);
+  fileInput.files = dataTransfer.files;
+  setSelectedFile(file);
 });
 
 document.querySelector("#select-all").addEventListener("click", () => {
@@ -182,6 +213,12 @@ function renderOptions() {
 
 function getSelectedItemIds() {
   return Array.from(document.querySelectorAll(".item-checkbox:checked")).map((input) => input.value);
+}
+
+function setSelectedFile(file) {
+  fileName.textContent = file ? file.name : "尚未选择文件";
+  clearStatus();
+  hideResults();
 }
 
 function buildQuoteRows(metrics, selectedIds) {
