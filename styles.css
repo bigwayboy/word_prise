@@ -116,6 +116,16 @@ input {
   border: 1px dashed #aac4cf;
   border-radius: 8px;
   background: var(--soft);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.upload-area.is-dragging {
+  border-color: var(--brand);
+  background: #dff2f6;
+  box-shadow: 0 0 0 4px rgba(23, 107, 135, 0.12);
 }
 
 .upload-button,
